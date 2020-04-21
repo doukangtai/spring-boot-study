@@ -1,0 +1,32 @@
+person:
+  name: dkt
+  age: 21
+  student: true
+  birth: 1999/03/03 23:12:59
+  #  maps:
+  #    book: 西游记
+  #    phone: oneplus
+  #  lists:
+  #    - test
+  #    - list集合
+  dog:
+    nickname: 小花狗
+    age: 3
+    parentsName: 小白狗和小棕狗
+    children:
+      - 老大
+      - 老二
+      - 老三
+  maps: {book: 西游记, phone: oneplus}
+  lists: [list01, list02]
+
+server:
+  port: 8081
+
+dog:
+  nickname: 小黄
+  age: 1
+  parents-name: 小黑狗和小花狗
+  children:
+    - 老六
+    - 老九
