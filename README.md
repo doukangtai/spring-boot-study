@@ -93,3 +93,6 @@ parentsName: 小白狗和小棕狗
 ==重点==
 
 entity类与yml中的值绑定时，entity类需要添加**set和get方法**，否则无法绑定成功
+
+
+
