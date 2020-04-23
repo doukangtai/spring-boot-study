@@ -33,18 +33,18 @@
 
 
 
-
----
-spring:
-  profiles:
-    active: prod
----
-server:
-  port: 8088
-spring:
-  profiles: dev
----
-server:
-  port: 8090
-spring:
-  profiles: prod
+#
+#---
+#spring:
+#  profiles:
+#    active: prod
+#---
+#server:
+#  port: 8088
+#spring:
+#  profiles: dev
+#---
+#server:
+#  port: 8090
+#spring:
+#  profiles: prod
