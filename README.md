@@ -780,3 +780,53 @@ Negative matches:
 
 ```
 
+# 二、spring-boot-02-log
+
+```java
+@SpringBootTest
+class SpringBoot02LogApplicationTests {
+
+    // 日志级别由低到高：trace<debug<info<warn<error
+    @Test
+    void contextLoads() {
+        Logger logger = LoggerFactory.getLogger(getClass());
+        logger.trace("trace日志...");
+        logger.debug("debug日志...");
+        // springboot默认日志级别
+        logger.info("info日志...");
+        logger.warn("warn日志...");
+        logger.error("error日志...");
+    }
+
+}
+```
+
+可以再application.properties中配置指定包下的日志级别
+
+```properties
+logging.level.com.dkt=debug
+```
+
+%d{yyyy/MM/dd-HH:mm:ss}——日志输出时间
+
+%10thread——使用10个字符靠右对齐输出日志的进程名字
+
+%-5level——日志级别，并且使用5个字符靠左对齐
+
+%logger——日志输出者的名字
+
+%msg——日志消息
+
+%n——平台的换行符
+
+```properties
+#在当前项目磁盘根目录创建spring-log文件夹，使用spring.log作为默认文件
+#也可以指定盘符路径
+#logging.file.path=/spring-log
+#不指定路径，在当前项目根目录下生成hhhhh.log
+#可以指定路径
+logging.file.name=hhhhh.log
+logging.pattern.console=%d{yyyy/MM/dd-HH:mm:ss}--->[%10thread]--->%-5level--->%logger--->%msg%n
+logging.pattern.file=%d{yyyy/MM/dd-HH:mm}<--->[%thread]<--->%-5level<--->%logger<--->%msg%n
+```
+
