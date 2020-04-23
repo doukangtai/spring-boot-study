@@ -819,6 +819,8 @@ logging.level.com.dkt=debug
 
 %n——平台的换行符
 
+**==logging.file.path和logging.file.name相比，同时配置时logging.file.name生效，级别更高==**
+
 ```properties
 #在当前项目磁盘根目录创建spring-log文件夹，使用spring.log作为默认文件
 #也可以指定盘符路径
