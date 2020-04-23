@@ -1,17 +1,20 @@
 package com.dkt.springboot01yml.entity;
 
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.stereotype.Component;
 
 import java.util.List;
 
 @Component
-@ConfigurationProperties(prefix = "dog")
+//@ConfigurationProperties(prefix = "dog")
 public class Dog {
 
     private String nickname;
     private Integer age;
+//    @Value("${dog.parentsName}")
     private String parentsName;
+//    @Value("${dog.children}")
     private List<String> children;
 
     @Override

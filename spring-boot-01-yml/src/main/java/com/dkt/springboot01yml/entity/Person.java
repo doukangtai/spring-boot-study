@@ -1,8 +1,15 @@
 package com.dkt.springboot01yml.entity;
 
+import org.hibernate.validator.constraints.Email;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.context.properties.ConfigurationProperties;
+import org.springframework.context.annotation.PropertySource;
+import org.springframework.lang.NonNull;
 import org.springframework.stereotype.Component;
+import org.springframework.validation.annotation.Validated;
 
+import javax.validation.constraints.AssertFalse;
+import javax.validation.constraints.NotNull;
 import java.util.Date;
 import java.util.List;
 import java.util.Map;
@@ -13,12 +20,20 @@ import java.util.Map;
  * 注意：需要添加set和get方法，否则无法绑定成功
  */
 
+//@Validated
+//@PropertySource(value = {"classpath:/person.properties"})
 @Component
 @ConfigurationProperties(prefix = "person")
 public class Person {
 
+//    @Value("${person.name}")
+//    @Email
+//    @NotNull
     private String name;
+//    @Value("#{2+3}")
     private Integer age;
+//    @Value("false")
+//    @AssertFalse
     private Boolean student;
     private Date birth;
     private Map<String, Object> maps;

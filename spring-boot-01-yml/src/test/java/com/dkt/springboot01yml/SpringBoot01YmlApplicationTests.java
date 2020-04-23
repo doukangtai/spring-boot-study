@@ -5,19 +5,30 @@ import com.dkt.springboot01yml.entity.Person;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.context.ApplicationContext;
 
 @SpringBootTest
 class SpringBoot01YmlApplicationTests {
 
     @Autowired
-    Person person;
+    ApplicationContext ioc;
+
+    @Test
+    void testIoc() {
+        boolean b = ioc.containsBean("cat");
+        System.out.println(b);
+    }
+
+
     @Autowired
-    Dog dog;
+    Person person;
+//    @Autowired
+//    Dog dog;
 
     @Test
     void contextLoads() {
         System.out.println(person);
-        System.out.println(dog);
+//        System.out.println(dog);
     }
 
 }
