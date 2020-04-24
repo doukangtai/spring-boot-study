@@ -1,6 +1,6 @@
-# 一、spring-boot-01-yml
+# 一、 spring-boot-01-yml
 
-## 1. JavaBean数据绑定，yml语法
+## 1、 JavaBean数据绑定，yml语法
 
 ### 1.1 格式
 
@@ -262,7 +262,7 @@ public class Person {
 private List<String> children;
 ```
 
-## 2、@PropertySource注解，配置文件中读取值
+## 2、 @PropertySource注解，配置文件中读取值
 
 - "classpath:/person.properties"扫描类路径下的person.properties文件，将**==前缀为person==的值与JavaBean绑定**
 
@@ -291,7 +291,7 @@ person.maps.k2=v2
 person.lists=v1,v2,v3
 ```
 
-## 3、向容器中添加组件
+## 3、 向容器中添加组件
 
 - 添加@Configuration、@Bean两个注解将Cat添加进spring容器
 
@@ -324,7 +324,7 @@ class SpringBoot01YmlApplicationTests {
     }
 ```
 
-## 4、配置文件添加占位符
+## 4、 配置文件添加占位符
 
 ```yaml
 ${random.value}
@@ -359,7 +359,7 @@ person:
 
 ${dd.name:你爸爸}表示dd.name不存在使用“你爸爸”作为默认值
 
-## 5、profile多环境开发
+## 5、 profile多环境开发
 
 ### 5.1 多profile文件：application-{profile}.properties/yml
 
@@ -388,7 +388,7 @@ spring:
   profiles: prod
 ```
 
-## 6、自动配置原理
+## 6、 自动配置原理
 
 ### 6.1 源码
 
@@ -780,7 +780,7 @@ Negative matches:
 
 ```
 
-# 二、spring-boot-02-log
+# 二、 spring-boot-02-log
 
 ```java
 @SpringBootTest
@@ -830,5 +830,151 @@ logging.level.com.dkt=debug
 logging.file.name=hhhhh.log
 logging.pattern.console=%d{yyyy/MM/dd-HH:mm:ss}--->[%10thread]--->%-5level--->%logger--->%msg%n
 logging.pattern.file=%d{yyyy/MM/dd-HH:mm}<--->[%thread]<--->%-5level<--->%logger<--->%msg%n
+```
+
+# 三、 spring-boot-03-restfulcrud
+
+## 1、 静态资源映射规则
+
+- **WebMvcAutoConfiguration类**
+
+```java
+public void addResourceHandlers(ResourceHandlerRegistry registry) {
+    if (!this.resourceProperties.isAddMappings()) {
+        logger.debug("Default resource handling disabled");
+    } else {
+        Duration cachePeriod = this.resourceProperties.getCache().getPeriod();
+        CacheControl cacheControl = this.resourceProperties.getCache().getCachecontrol().toHttpCacheControl();
+        if (!registry.hasMappingForPattern("/webjars/**")) {
+            this.customizeResourceHandlerRegistration(registry.addResourceHandler(new String[]{"/webjars/**"}).addResourceLocations(new String[]{"classpath:/META-INF/resources/webjars/"}).setCachePeriod(this.getSeconds(cachePeriod)).setCacheControl(cacheControl));
+        }
+
+        String staticPathPattern = this.mvcProperties.getStaticPathPattern();
+        if (!registry.hasMappingForPattern(staticPathPattern)) {
+            this.customizeResourceHandlerRegistration(registry.addResourceHandler(new String[]{staticPathPattern}).addResourceLocations(WebMvcAutoConfiguration.getResourceLocations(this.resourceProperties.getStaticLocations())).setCachePeriod(this.getSeconds(cachePeriod)).setCacheControl(cacheControl));
+        }
+
+    }
+}
+```
+
+### 1.1 访问webjars资源
+
+https://www.webjars.org/导入jar资源的maven坐标
+
+this.customizeResourceHandlerRegistration(registry.addResourceHandler(new String[]{"/webjars/**"}).addResourceLocations(new String[]{"classpath:/META-INF/resources/webjars/"})
+
+所有"/webjars/**"资源都去jar的"classpath:/META-INF/resources/webjars/"路径下找
+
+**==举例==**：http://localhost:8080/webjars/jquery/3.5.0/jquery.js
+
+### 1.2 访问“/**”资源
+
+this.customizeResourceHandlerRegistration(registry.addResourceHandler(new String[]{staticPathPattern}).addResourceLocations(WebMvcAutoConfiguration.getResourceLocations(this.resourceProperties.getStaticLocations()))
+
+```java
+@ConfigurationProperties(
+    prefix = "spring.mvc"
+)
+public class WebMvcProperties {
+    private Format messageCodesResolverFormat;
+    private Locale locale;
+    private WebMvcProperties.LocaleResolver localeResolver;
+    private String dateFormat;
+    private boolean dispatchTraceRequest;
+    private boolean dispatchOptionsRequest;
+    private boolean ignoreDefaultModelOnRedirect;
+    private boolean publishRequestHandledEvents;
+    private boolean throwExceptionIfNoHandlerFound;
+    private boolean logResolvedException;
+    private String staticPathPattern;
+    private final WebMvcProperties.Async async;
+    private final WebMvcProperties.Servlet servlet;
+    private final WebMvcProperties.View view;
+    private final WebMvcProperties.Contentnegotiation contentnegotiation;
+    private final WebMvcProperties.Pathmatch pathmatch;
+
+    public WebMvcProperties() {
+        this.localeResolver = WebMvcProperties.LocaleResolver.ACCEPT_HEADER;
+        this.dispatchTraceRequest = false;
+        this.dispatchOptionsRequest = true;
+        this.ignoreDefaultModelOnRedirect = true;
+        this.publishRequestHandledEvents = true;
+        this.throwExceptionIfNoHandlerFound = false;
+        this.logResolvedException = false;
+        this.staticPathPattern = "/**";
+        this.async = new WebMvcProperties.Async();
+        this.servlet = new WebMvcProperties.Servlet();
+        this.view = new WebMvcProperties.View();
+        this.contentnegotiation = new WebMvcProperties.Contentnegotiation();
+        this.pathmatch = new WebMvcProperties.Pathmatch();
+    }
+```
+
+this.staticPathPattern = "/**";
+
+```java
+@ConfigurationProperties(
+    prefix = "spring.resources",
+    ignoreUnknownFields = false
+)
+public class ResourceProperties {
+    private static final String[] CLASSPATH_RESOURCE_LOCATIONS = new String[]{"classpath:/META-INF/resources/", "classpath:/resources/", "classpath:/static/", "classpath:/public/"};
+    private String[] staticLocations;
+    private boolean addMappings;
+    private final ResourceProperties.Chain chain;
+    private final ResourceProperties.Cache cache;
+
+    public ResourceProperties() {
+        this.staticLocations = CLASSPATH_RESOURCE_LOCATIONS;
+        this.addMappings = true;
+        this.chain = new ResourceProperties.Chain();
+        this.cache = new ResourceProperties.Cache();
+    }
+```
+
+{"classpath:/META-INF/resources/", "classpath:/resources/", "classpath:/static/", "classpath:/public/"};
+
+所有的"/**"访问都去当前项目的"classpath:/META-INF/resources/", "classpath:/resources/", "classpath:/static/", "classpath:/public/"这==4个静态资源路径==找
+
+==**举例**==：http://localhost:8080/A/jquery-3.4.1.js
+
+### 1.3 访问首页index.html
+
+==4个静态资源路径==下的index.html可以被"/**"映射
+
+==**举例**==：http://localhost:8080/
+
+### 1.4 favicon.ico图标
+
+springboot2.2取消默认ico，只需在==4个静态资源路径==之一下放favicon.ico即可
+
+springboot2.2中favicon.ico的详细更改：https://github.com/spring-projects/spring-boot/issues/17925
+
+### 1.5 自定义静态资源路径
+
+```java
+@ConfigurationProperties(
+    prefix = "spring.resources",
+    ignoreUnknownFields = false
+)
+public class ResourceProperties {
+    private static final String[] CLASSPATH_RESOURCE_LOCATIONS = new String[]{"classpath:/META-INF/resources/", "classpath:/resources/", "classpath:/static/", "classpath:/public/"};
+    private String[] staticLocations;
+    private boolean addMappings;
+    private final ResourceProperties.Chain chain;
+    private final ResourceProperties.Cache cache;
+
+    public ResourceProperties() {
+        this.staticLocations = CLASSPATH_RESOURCE_LOCATIONS;
+        this.addMappings = true;
+        this.chain = new ResourceProperties.Chain();
+        this.cache = new ResourceProperties.Cache();
+    }
+```
+
+```properties
+spring.resources.static-locations=classpath:/he/,classpath:/ha/
+#数组用逗号分隔
 ```
 
