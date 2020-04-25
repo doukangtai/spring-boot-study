@@ -949,7 +949,7 @@ public class ResourceProperties {
 
 springboot2.2取消默认ico，只需在==4个静态资源路径==之一下放favicon.ico即可
 
-springboot2.2中favicon.ico的详细更改：https://github.com/spring-projects/spring-boot/issues/17925
+更改https://github.com/spring-projects/spring-boot/issues/17925
 
 ### 1.5 自定义静态资源路径
 
@@ -977,4 +977,135 @@ public class ResourceProperties {
 spring.resources.static-locations=classpath:/he/,classpath:/ha/
 #数组用逗号分隔
 ```
+
+## 2、 自定义WebMvcConfigurer
+
+==**配置步骤：**==
+
+1. @Configuration
+2. implements WebMvcConfigurer
+
+```java
+@Configuration
+public class MyWebMvcConfig implements WebMvcConfigurer {
+
+    @Override
+    public void addViewControllers(ViewControllerRegistry registry) {
+        registry.addViewController("/").setViewName("lgtest");
+    }
+}
+```
+
+- 自定义添加**视图控制器和拦截器**
+
+```java
+@Configuration
+public class MyWebMvcConfig implements WebMvcConfigurer {
+
+    @Override
+    public void addViewControllers(ViewControllerRegistry registry) {
+        registry.addViewController("/").setViewName("index");
+        registry.addViewController("/index.html").setViewName("index");
+        registry.addViewController("/dashboard").setViewName("dashboard");
+    }
+
+    @Override
+    public void addInterceptors(InterceptorRegistry registry) {
+        registry.addInterceptor(new MyInterceptor()).addPathPatterns("/**").excludePathPatterns("/", "/index.html", "/login", "/asserts/**");
+    }
+}
+```
+
+```java
+public class MyInterceptor implements HandlerInterceptor {
+
+    @Override
+    public boolean preHandle(HttpServletRequest request, HttpServletResponse response, Object handler) throws Exception {
+        Object user = request.getSession().getAttribute("user");
+        if (user == null) {
+            request.getRequestDispatcher("/index.html").forward(request, response);
+            return false;
+        } else {
+            System.out.println("MyInterceptor:" + user);
+            return true;
+        }
+    }
+}
+```
+
+## 3、 PUT、DELETE请求
+
+```java
+public class HiddenHttpMethodFilter extends OncePerRequestFilter {
+    private static final List<String> ALLOWED_METHODS;
+    public static final String DEFAULT_METHOD_PARAM = "_method";
+    private String methodParam = "_method";
+
+    public HiddenHttpMethodFilter() {
+    }
+
+    public void setMethodParam(String methodParam) {
+        Assert.hasText(methodParam, "'methodParam' must not be empty");
+        this.methodParam = methodParam;
+    }
+
+    protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain filterChain) throws ServletException, IOException {
+        HttpServletRequest requestToUse = request;
+        if ("POST".equals(request.getMethod()) && request.getAttribute("javax.servlet.error.exception") == null) {
+            String paramValue = request.getParameter(this.methodParam);
+            if (StringUtils.hasLength(paramValue)) {
+                String method = paramValue.toUpperCase(Locale.ENGLISH);
+                if (ALLOWED_METHODS.contains(method)) {
+                    requestToUse = new HiddenHttpMethodFilter.HttpMethodRequestWrapper(request, method);
+                }
+            }
+        }
+
+        filterChain.doFilter((ServletRequest)requestToUse, response);
+    }
+```
+
+```java
+@Bean
+@ConditionalOnMissingBean({HiddenHttpMethodFilter.class})
+@ConditionalOnProperty(
+    prefix = "spring.mvc.hiddenmethod.filter",
+    name = {"enabled"},
+    matchIfMissing = false
+)
+public OrderedHiddenHttpMethodFilter hiddenHttpMethodFilter() {
+    return new OrderedHiddenHttpMethodFilter();
+}
+```
+
+```java
+@Retention(RetentionPolicy.RUNTIME)
+@Target({ElementType.TYPE, ElementType.METHOD})
+@Documented
+@Conditional({OnPropertyCondition.class})
+public @interface ConditionalOnProperty {
+    String[] value() default {};
+
+    String prefix() default "";
+
+    String[] name() default {};
+
+    String havingValue() default "";
+
+    boolean matchIfMissing() default false;
+}
+```
+
+1. ```java
+   spring.mvc.hiddenmethod.filter.enabled=true
+   ```
+
+   ==matchIfMissing默认是false==，如果不在配置文件中配置property，会失败
+
+   ==matchIfMissing如果是true==，即使不配置property，也会成功
+
+2. ```html
+   <input type="hidden" name="_method" value="PUT"/>
+   <input type="hidden" name="_method" value="DELETE"/>
+   ```
 
