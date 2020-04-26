@@ -1680,3 +1680,272 @@ protected static class WhitelabelErrorViewConfiguration {
     }
 }
 ```
+
+# 四、 spring-boot-04-mybatis
+
+## 1、 MySQL&Druid配置
+
+```yaml
+spring:
+  datasource:
+    url: jdbc:mysql://localhost:3306/mybatis?useUnicode=true&characterEncoding=utf8&serverTimezone=GMT&useSSL=true
+    username: root
+    password: root
+    driver-class-name: com.mysql.cj.jdbc.Driver
+    type: com.alibaba.druid.pool.DruidDataSource
+    druid:
+      # 初始化时建立物理连接的个数
+      initial-size: 5
+      # 最小连接池数量
+      min-idle: 1
+      # 最大连接池数量
+      max-active: 20
+      # 获取连接时最大等待时间，单位毫秒
+      max-wait: 60000
+      # 配置间隔多久才进行一次检测，检测需要关闭的空闲连接，单位是毫秒
+      time-between-eviction-runsMillis: 60000
+      # 连接保持空闲而不被驱逐的最小时间
+      min-evictable-idle-timeMillis: 300000
+      # 用来检测连接是否有效的sql，要求是一个查询语句
+      validation-query: select 1 FROM DUAL
+      # 单位：秒，检测连接是否有效的超时时间。底层调用jdbc Statement对象的void setQueryTimeout(int seconds)方法
+      validation-query-timeout: 5
+      # 建议配置为true，不影响性能，并且保证安全性。申请连接的时候检测，如果空闲时间大于timeBetweenEvictionRunsMillis，执行validationQuery检测连接是否有效。
+      test-while-idle: true
+      # 申请连接时执行validationQuery检测连接是否有效，做了这个配置会降低性能。
+      test-on-borrow: false
+      # 归还连接时执行validationQuery检测连接是否有效，做了这个配置会降低性能。
+      test-on-return: false
+      # 是否缓存preparedStatement，也就是PSCache。PSCache对支持游标的数据库性能提升巨大，比如说oracle。在mysql下建议关闭。
+      pool-prepared-statements: true
+      # 要启用PSCache，必须配置大于0，当大于0时，poolPreparedStatements自动触发修改为true。
+      max-pool-prepared-statement-per-connection-size: 20
+      # 配置监控统计拦截的filters，去掉后监控界面sql无法统计
+      filters: stat,wall
+      # 通过connectProperties属性来打开mergeSql功能；慢SQL记录
+      connection-properties: druid.stat.mergeSql=true;druid.stat.slowSqlMillis=500
+      # 合并多个DruidDataSource的监控数据
+      use-global-data-source-stat: true
+      # WebStatFilter配置，说明请参考Druid Wiki，配置_配置WebStatFilter
+      web-stat-filter:
+        enabled: true
+        url-pattern: /*
+        exclusions: "*.js,*.gif,*.jpg,*.png,*.css,*.ico,/druid/*"
+      # StatViewServlet配置，说明请参考Druid Wiki，配置_StatViewServlet配置
+      stat-view-servlet:
+        enabled: true
+        url-pattern: /druid/*
+        # 禁用HTML页面上的“Reset All”功能
+        reset-enable: false
+        # 登录用户名
+        login-username: admin
+        # 登录密码
+        login-password: admin
+        # IP白名单(没有配置或者为空，则允许所有访问)
+        allow: 127.0.0.1
+        # IP黑名单 (存在共同时，deny优先于allow)
+        deny: 192.168.32.139
+```
+
+## 2、 mybatis简单增删改查
+
+### 2.1 注解版
+
+开启mybatis驼峰命名法
+
+```yaml
+mybatis:
+  configuration:
+    map-underscore-to-camel-case: true
+```
+
+```java
+@Mapper
+public interface EmpMapper {
+
+    @Select("select * from emp")
+    public List<Emp> queryAllEmp();
+
+    @Select("select * from emp where id=#{id}")
+    public Emp queryById(Integer id);
+
+    // 插入数据时自动生成key，返回json数据是带有id，否则不带
+    @Options(useGeneratedKeys = true,keyProperty = "id")
+    @Insert("insert into emp(emp_name) values(#{empName})")
+    public void insertEmp(Emp emp);
+
+    @Delete("delete from emp where id=#{id}")
+    public void deleteEmp(Integer id);
+
+    @Update("update emp set emp_name=#{empName} where id=#{id}")
+    public void updateEmp(Emp emp);
+
+}
+```
+
+```java
+// 此注解返回json数据
+@RestController
+public class EmpController {
+
+    @Autowired
+    EmpMapper empMapper;
+
+    @GetMapping(value = "/all")
+    public List<Emp> queryAllEmp() {
+        List<Emp> emps = empMapper.queryAllEmp();
+        return emps;
+    }
+
+    @GetMapping(value = "/query/{id}")
+    public Emp queryById(@PathVariable(value = "id") Integer id) {
+        Emp emp = empMapper.queryById(id);
+        return emp;
+    }
+
+    @GetMapping(value = "/insert")
+    public Emp insertEmp(Emp emp) {
+        empMapper.insertEmp(emp);
+        return emp;
+    }
+
+    @GetMapping(value = "/delete/{id}")
+    public void deleteEmp(@PathVariable(value = "id") Integer id) {
+        empMapper.deleteEmp(id);
+    }
+
+    @GetMapping(value = "/update")
+    public void updateEmp(Emp emp) {
+        empMapper.updateEmp(emp);
+    }
+
+}
+```
+
+```java
+public class Emp {
+
+    private Integer id;
+    private String empName;
+
+    public Integer getId() {
+        return id;
+    }
+
+    public void setId(Integer id) {
+        this.id = id;
+    }
+
+    public String getEmpName() {
+        return empName;
+    }
+
+    public void setEmpName(String empName) {
+        this.empName = empName;
+    }
+
+}
+```
+
+### 2.2 配置版
+
+**==貌似配置版与注解版不能同时配置：==**application.yml文件中配置mybatis的驼峰命名和指定配置文件路径，报异常
+
+application.yml
+
+```yaml
+mybatis:
+  # 指定mybatis全局配置文件路径
+  config-location: classpath:/mybatis/mybatis-config.xml
+  # 指定mapper配置文件路径
+  mapper-locations: classpath:/mybatis/mapper/*.xml
+```
+
+mybatis-config.xml全局配置文件
+
+```xml
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE configuration
+        PUBLIC "-//mybatis.org//DTD Config 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-config.dtd">
+<configuration>
+    <settings>
+        <setting name="mapUnderscoreToCamelCase" value="true"/>
+    </settings>
+</configuration>
+```
+
+EmpMapper.xml映射配置文件
+
+```xml
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.dkt.springboot04mybatis.mapper.DogMapper">
+    <select id="queryById" resultType="com.dkt.springboot04mybatis.entity.Dog" parameterType="java.lang.Integer">
+    select * from dog where id = #{id}
+  </select>
+    <insert id="insertDog" parameterType="java.lang.String">
+        insert into dog(na_me) values(#{naMe})
+    </insert>
+</mapper>
+```
+
+```java
+@Mapper
+@Repository
+public interface DogMapper {
+
+    public Dog queryById(Integer id);
+
+    public void insertDog(Dog dog);
+
+}
+```
+
+```java
+@RestController
+public class DogController {
+
+    @Autowired
+    DogMapper dogMapper;
+
+    @GetMapping(value = "/dog/{id}")
+    public Dog queryById(@PathVariable(value = "id") Integer id) {
+        Dog dog = dogMapper.queryById(id);
+        return dog;
+    }
+
+    @GetMapping(value = "/dog/insert")
+    public void insertDog(Dog dog) {
+        dogMapper.insertDog(dog);
+    }
+
+}
+```
+
+```java
+public class Dog {
+
+    private Integer id;
+
+    public Integer getId() {
+        return id;
+    }
+
+    public void setId(Integer id) {
+        this.id = id;
+    }
+
+    public String getNaMe() {
+        return naMe;
+    }
+
+    public void setNaMe(String naMe) {
+        this.naMe = naMe;
+    }
+
+    private String naMe;
+}
+```
