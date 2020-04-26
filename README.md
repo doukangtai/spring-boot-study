@@ -1,3 +1,5 @@
+
+
 # 一、 spring-boot-01-yml
 
 ## 1、 JavaBean数据绑定，yml语法
@@ -1109,3 +1111,572 @@ public @interface ConditionalOnProperty {
    <input type="hidden" name="_method" value="DELETE"/>
    ```
 
+## 4、 自定错误页面
+
+详见：**==ErrorMvcAutoConfiguration==**类中**==4个==**重要方法
+
+1. 有模板引擎：会去templates/error/404.html或4xx.html或5xx.html加载对应status的页面
+
+   页面能获取的信息；
+
+   ​				timestamp：时间戳
+
+   ​				status：状态码
+
+   ​				error：错误提示
+
+   ​				exception：异常对象
+
+   ​				message：异常消息
+
+   ​				errors：JSR303数据校验的错误都在这里
+
+   ```html
+   <h1>5xx</h1>
+   <p>timestamp:[[${timestamp}]]</p>
+   <p>status:[[${status}]]</p>
+   <p>error:[[${error}]]</p>
+   <p>exception:[[${exception}]]</p>
+   <p>message:[[${message}]]</p>
+   <p>errors:[[${errors}]]</p>
+   ```
+
+2. 没有模板引擎：会去静态资源路径下找
+
+   - **==DefaultErrorViewResolver==**
+
+   ```java
+   public class DefaultErrorViewResolver implements ErrorViewResolver, Ordered {
+   
+   public ModelAndView resolveErrorView(HttpServletRequest request, HttpStatus status, Map<String, Object> model) {
+       ModelAndView modelAndView = this.resolve(String.valueOf(status.value()), model);
+       // 比如发生404却没有找到对应的error/404或error/404.html，则返回null
+       // 在通过SERIES_VIEWS寻找对应的4xx或5xx页面，返回对应的错误页面
+       if (modelAndView == null && SERIES_VIEWS.containsKey(status.series())) {
+           modelAndView = this.resolve((String)SERIES_VIEWS.get(status.series()), model);
+       }
+   
+       return modelAndView;
+   }
+   
+   private ModelAndView resolve(String viewName, Map<String, Object> model) {
+       // 在error/下找错误页面
+       String errorViewName = "error/" + viewName;
+       TemplateAvailabilityProvider provider = this.templateAvailabilityProviders.getProvider(errorViewName, this.applicationContext);
+       // 有模板引擎直接返回ModelAndView，否则resolveResource解析资源
+       return provider != null ? new ModelAndView(errorViewName, model) : this.resolveResource(errorViewName, model);
+   }
+   
+   private ModelAndView resolveResource(String viewName, Map<String, Object> model) {
+       String[] var3 = this.resourceProperties.getStaticLocations();
+       int var4 = var3.length;
+   
+       for(int var5 = 0; var5 < var4; ++var5) {
+           String location = var3[var5];
+   
+           try {
+               Resource resource = this.applicationContext.getResource(location);
+               resource = resource.createRelative(viewName + ".html");
+               // 比如error/404.html存在，返回ModelAndView，否则返回null
+               if (resource.exists()) {
+                   return new ModelAndView(new DefaultErrorViewResolver.HtmlResourceView(resource), model);
+               }
+           } catch (Exception var8) {
+           }
+       }
+   
+       return null;
+   }
+       
+       
+       static {
+           Map<Series, String> views = new EnumMap(Series.class);
+           views.put(Series.CLIENT_ERROR, "4xx");
+           views.put(Series.SERVER_ERROR, "5xx");
+           SERIES_VIEWS = Collections.unmodifiableMap(views);
+       }
+   
+   ```
+
+3. 以上都没有，则会生成默认的空白错误页
+
+- **==BasicErrorController&DefaultErrorAttributes==**
+
+```java
+@Controller
+// 处理/error请求
+@RequestMapping({"${server.error.path:${error.path:/error}}"})
+public class BasicErrorController extends AbstractErrorController {
+    // 浏览器发送的text/html请求，返回modelAndView视图页
+    @RequestMapping(
+        produces = {"text/html"}
+    )
+    public ModelAndView errorHtml(HttpServletRequest request, HttpServletResponse response) {
+        HttpStatus status = this.getStatus(request);
+        Map<String, Object> model = Collections.unmodifiableMap(this.getErrorAttributes(request, this.isIncludeStackTrace(request, MediaType.TEXT_HTML)));
+        response.setStatus(status.value());
+        // 通过获取status和model等信息进行resolveErrorView解析错误视图页
+        ModelAndView modelAndView = this.resolveErrorView(request, response, status, model);
+        // 错误视图页不存在，则会从容器中找叫error的bean
+        return modelAndView != null ? modelAndView : new ModelAndView("error", model);
+    }
+
+    // postman发送的返回json数据
+    @RequestMapping
+    public ResponseEntity<Map<String, Object>> error(HttpServletRequest request) {
+        HttpStatus status = this.getStatus(request);
+        if (status == HttpStatus.NO_CONTENT) {
+            return new ResponseEntity(status);
+        } else {
+            Map<String, Object> body = this.getErrorAttributes(request, this.isIncludeStackTrace(request, MediaType.ALL));
+            return new ResponseEntity(body, status);
+        }
+    }
+
+```
+
+```java
+@Conditional({ErrorMvcAutoConfiguration.ErrorTemplateMissingCondition.class})
+protected static class WhitelabelErrorViewConfiguration {
+    private final ErrorMvcAutoConfiguration.StaticView defaultErrorView = new ErrorMvcAutoConfiguration.StaticView();
+
+    protected WhitelabelErrorViewConfiguration() {
+    }
+	// 叫"error"的bean，这个bean是StaticView
+    @Bean(
+        name = {"error"}
+    )
+    @ConditionalOnMissingBean(
+        name = {"error"}
+    )
+    public View defaultErrorView() {
+        return this.defaultErrorView;
+    }
+
+    @Bean
+    @ConditionalOnMissingBean
+    public BeanNameViewResolver beanNameViewResolver() {
+        BeanNameViewResolver resolver = new BeanNameViewResolver();
+        resolver.setOrder(2147483637);
+        return resolver;
+    }
+}
+```
+
+```java
+private static class StaticView implements View {
+    private static final MediaType TEXT_HTML_UTF8;
+    private static final Log logger;
+
+    private StaticView() {
+    }
+	// render渲染出空白默认错误页
+    public void render(Map<String, ?> model, HttpServletRequest request, HttpServletResponse response) throws Exception {
+```
+
+获取status和model路线
+
+```java
+@Controller
+@RequestMapping({"${server.error.path:${error.path:/error}}"})
+public class BasicErrorController extends AbstractErrorController {
+    @RequestMapping(
+        produces = {"text/html"}
+    )
+    public ModelAndView errorHtml(HttpServletRequest request, HttpServletResponse response) {
+        HttpStatus status = this.getStatus(request);
+        Map<String, Object> model = Collections.unmodifiableMap(this.getErrorAttributes(request, this.isIncludeStackTrace(request, MediaType.TEXT_HTML)));
+        response.setStatus(status.value());
+        ModelAndView modelAndView = this.resolveErrorView(request, response, status, model);
+        return modelAndView != null ? modelAndView : new ModelAndView("error", model);
+    }
+
+
+
+
+public abstract class AbstractErrorController implements ErrorController {
+    protected Map<String, Object> getErrorAttributes(HttpServletRequest request, boolean includeStackTrace) {
+        WebRequest webRequest = new ServletWebRequest(request);
+        return this.errorAttributes.getErrorAttributes(webRequest, includeStackTrace);
+    }
+
+    protected HttpStatus getStatus(HttpServletRequest request) {
+        Integer statusCode = (Integer)request.getAttribute("javax.servlet.error.status_code");
+        if (statusCode == null) {
+            return HttpStatus.INTERNAL_SERVER_ERROR;
+        } else {
+            try {
+                return HttpStatus.valueOf(statusCode);
+            } catch (Exception var4) {
+                return HttpStatus.INTERNAL_SERVER_ERROR;
+            }
+        }
+    }
+
+
+
+    
+    
+
+public interface ErrorAttributes {
+    Map<String, Object> getErrorAttributes(WebRequest webRequest, boolean includeStackTrace);
+
+    Throwable getError(WebRequest webRequest);
+}
+
+
+
+
+
+@Order(-2147483648)
+public class DefaultErrorAttributes implements ErrorAttributes, HandlerExceptionResolver, Ordered {
+    public Map<String, Object> getErrorAttributes(WebRequest webRequest, boolean includeStackTrace) {
+        // 错误属性状态码、error详细信息、路径
+        Map<String, Object> errorAttributes = new LinkedHashMap();
+        errorAttributes.put("timestamp", new Date());
+        this.addStatus(errorAttributes, webRequest);
+        this.addErrorDetails(errorAttributes, webRequest, includeStackTrace);
+        this.addPath(errorAttributes, webRequest);
+        return errorAttributes;
+    }
+
+```
+
+
+
+- **==ErrorMvcAutoConfiguration.ErrorPageCustomizer==**
+
+```java
+@Bean
+public ErrorMvcAutoConfiguration.ErrorPageCustomizer errorPageCustomizer(DispatcherServletPath dispatcherServletPath) {
+    return new ErrorMvcAutoConfiguration.ErrorPageCustomizer(this.serverProperties, dispatcherServletPath);
+}
+
+
+private static class ErrorPageCustomizer implements ErrorPageRegistrar, Ordered {
+        private final ServerProperties properties;
+        private final DispatcherServletPath dispatcherServletPath;
+
+        protected ErrorPageCustomizer(ServerProperties properties, DispatcherServletPath dispatcherServletPath) {
+            this.properties = properties;
+            this.dispatcherServletPath = dispatcherServletPath;
+        }
+
+        public void registerErrorPages(ErrorPageRegistry errorPageRegistry) {
+        // 获取配置页所在路径"/error"路径，发送/error/请求
+            ErrorPage errorPage = new ErrorPage(this.dispatcherServletPath.getRelativePath(this.properties.getError().getPath()));
+            errorPageRegistry.addErrorPages(new ErrorPage[]{errorPage});
+        }
+
+        public int getOrder() {
+            return 0;
+        }
+}
+
+
+
+public class ErrorProperties {
+    @Value("${error.path:/error}")
+    private String path = "/error";
+    private boolean includeException;
+    private ErrorProperties.IncludeStacktrace includeStacktrace;
+    private final ErrorProperties.Whitelabel whitelabel;
+
+    public ErrorProperties() {
+        this.includeStacktrace = ErrorProperties.IncludeStacktrace.NEVER;
+        this.whitelabel = new ErrorProperties.Whitelabel();
+    }
+
+    public String getPath() {
+        return this.path;
+    }
+
+
+```
+
+## 5、 自定义异常json数据
+
+```java
+@Controller
+public class HelloController {
+
+    @ResponseBody
+    @RequestMapping(value = "/hello")
+    public String hello(@RequestParam(value = "user") String user) {
+        if ("123".equals(user)) {
+            throw new UserNotExistException();
+        }
+        return "Hello world";
+    }
+
+}
+```
+
+自定义异常类
+
+```java
+public class UserNotExistException extends RuntimeException {
+
+    public UserNotExistException() {
+        super("用户不存在");
+    }
+
+}
+```
+
+自定义异常处理器，返回map的key：value，json数据
+
+```java
+@ControllerAdvice
+public class MyExceptionHandler {
+
+    @ResponseBody
+    @ExceptionHandler(value = UserNotExistException.class)
+    public Map<String, Object> myExceptionHandler(Exception e) {
+        Map<String, Object> map = new HashMap<>();
+        map.put("code", "user.not.exist.code");
+        map.put("message", e.getMessage());
+        return map;
+    }
+
+}
+```
+
+## 6、 自适应view和json页
+
+```java
+@Controller
+// 处理/error请求
+@RequestMapping({"${server.error.path:${error.path:/error}}"})
+public class BasicErrorController extends AbstractErrorController {
+    
+    @RequestMapping(
+        produces = {"text/html"}
+    )
+    public ModelAndView errorHtml(HttpServletRequest request, HttpServletResponse response) {
+        // 获取状态码
+        HttpStatus status = this.getStatus(request);
+        Map<String, Object> model = Collections.unmodifiableMap(this.getErrorAttributes(request, this.isIncludeStackTrace(request, MediaType.TEXT_HTML)));
+        response.setStatus(status.value());
+        // 根据状态码解析视图
+        ModelAndView modelAndView = this.resolveErrorView(request, response, status, model);
+        return modelAndView != null ? modelAndView : new ModelAndView("error", model);
+    }
+
+    // json数据与html同理
+    @RequestMapping
+    public ResponseEntity<Map<String, Object>> error(HttpServletRequest request) {
+        HttpStatus status = this.getStatus(request);
+        if (status == HttpStatus.NO_CONTENT) {
+            return new ResponseEntity(status);
+        } else {
+            Map<String, Object> body = this.getErrorAttributes(request, this.isIncludeStackTrace(request, MediaType.ALL));
+            return new ResponseEntity(body, status);
+        }
+    }
+
+```
+
+```java
+public abstract class AbstractErrorController implements ErrorController {
+    protected HttpStatus getStatus(HttpServletRequest request) {
+        Integer statusCode = (Integer)request.getAttribute("javax.servlet.error.status_code");
+        if (statusCode == null) {
+            return HttpStatus.INTERNAL_SERVER_ERROR;
+        } else {
+            try {
+                return HttpStatus.valueOf(statusCode);
+            } catch (Exception var4) {
+                return HttpStatus.INTERNAL_SERVER_ERROR;
+            }
+        }
+    }
+
+```
+
+由于status从request域中获取，所以在request域中添加"javax.servlet.error.status_code"
+
+由于BasicErrorController类处理/error请求，所以"forward:/error"转发此请求
+
+```java
+@ControllerAdvice
+public class MyExceptionHandler {
+
+    @ExceptionHandler(value = UserNotExistException.class)
+    public String myExceptionHandler(Exception e, HttpServletRequest request) {
+        Map<String, Object> map = new HashMap<>();
+        request.setAttribute("javax.servlet.error.status_code", 500);
+        map.put("code", "user.not.exist.code");
+        map.put("message", e.getMessage());
+        return "forward:/error";
+    }
+
+}
+```
+
+## 7、 自适应view和json页，同时可以添加自定义数据
+
+最终都是通过getErrorAttributes这个方法获取Attributes
+
+**两个条件：**DefaultErrorAttributes implements ErrorAttributes和@ConditionalOnMissingBean(
+    value = {ErrorAttributes.class},
+    search = SearchStrategy.CURRENT
+)
+
+只要重写DefaultErrorAttributes的getErrorAttributes方法即可添加自定义数据
+
+```java
+@Order(-2147483648)
+public class DefaultErrorAttributes implements ErrorAttributes, HandlerExceptionResolver, Ordered {
+    public Map<String, Object> getErrorAttributes(WebRequest webRequest, boolean includeStackTrace) {
+        Map<String, Object> errorAttributes = new LinkedHashMap();
+        errorAttributes.put("timestamp", new Date());
+        this.addStatus(errorAttributes, webRequest);
+        this.addErrorDetails(errorAttributes, webRequest, includeStackTrace);
+        this.addPath(errorAttributes, webRequest);
+        return errorAttributes;
+    }
+
+```
+
+```java
+@Configuration(
+    proxyBeanMethods = false
+)
+@ConditionalOnWebApplication(
+    type = Type.SERVLET
+)
+@ConditionalOnClass({Servlet.class, DispatcherServlet.class})
+@AutoConfigureBefore({WebMvcAutoConfiguration.class})
+@EnableConfigurationProperties({ServerProperties.class, ResourceProperties.class, WebMvcProperties.class})
+public class ErrorMvcAutoConfiguration {
+
+@Bean
+@ConditionalOnMissingBean(
+    value = {ErrorAttributes.class},
+    search = SearchStrategy.CURRENT
+)
+public DefaultErrorAttributes errorAttributes() {
+    return new DefaultErrorAttributes(this.serverProperties.getError().isIncludeException());
+}
+```
+
+```java
+@ControllerAdvice
+public class MyExceptionHandler {
+
+    @ExceptionHandler(value = UserNotExistException.class)
+    public String myExceptionHandler(Exception e, HttpServletRequest request) {
+        Map<String, Object> map = new HashMap<>();
+        request.setAttribute("javax.servlet.error.status_code", 500);
+        map.put("code", "user.not.exist.code");
+        map.put("message", e.getMessage());
+        // 将自定义数据添加进request域中
+        request.setAttribute("msg", map);
+        return "forward:/error";
+    }
+
+}
+```
+
+```java
+@Component
+public class MyErrorAttribute extends DefaultErrorAttributes {
+    @Override
+    public Map<String, Object> getErrorAttributes(WebRequest webRequest, boolean includeStackTrace) {
+        Map<String, Object> map = super.getErrorAttributes(webRequest, includeStackTrace);
+        map.put("my_message", "DKT");
+        // 从request域中获取自定义数据
+        // 0表示request域，1表示session域
+        Object msg = webRequest.getAttribute("msg", 0);
+        map.put("msg", msg);
+        return map;
+    }
+}
+```
+
+```java
+public interface RequestAttributes {
+    int SCOPE_REQUEST = 0;
+    int SCOPE_SESSION = 1;
+	@Nullable
+	Object getAttribute(String name, int scope);
+```
+
+**==总结错误页生成过程：==**主要分析ErrorMvcAutoConfiguration类中生成错误页的**==逻辑==**
+
+1、通过此方法发送/error请求
+
+```java
+@Bean
+public ErrorMvcAutoConfiguration.ErrorPageCustomizer errorPageCustomizer(DispatcherServletPath dispatcherServletPath) {
+```
+
+2、此方法接受/error请求，并请求获取Attribute，最后解析生成resources目录下自定义的view
+
+```java
+@Bean
+@ConditionalOnMissingBean(
+    value = {ErrorController.class},
+    search = SearchStrategy.CURRENT
+)
+public BasicErrorController basicErrorController(ErrorAttributes errorAttributes, ObjectProvider<ErrorViewResolver> errorViewResolvers) {
+```
+
+3、通过此方法获取Attribute
+
+```java
+@Bean
+@ConditionalOnMissingBean(
+    value = {ErrorAttributes.class},
+    search = SearchStrategy.CURRENT
+)
+public DefaultErrorAttributes errorAttributes() {
+```
+
+4、通过此方法解析生成view
+
+```java
+@Bean
+@ConditionalOnBean({DispatcherServlet.class})
+@ConditionalOnMissingBean({ErrorViewResolver.class})
+DefaultErrorViewResolver conventionErrorViewResolver() {
+```
+
+5、若解析view失败，会找name=“error”的Bean，最终会渲染生成springboot默认的错误页面
+
+```java
+@Configuration(
+    proxyBeanMethods = false
+)
+@ConditionalOnProperty(
+    prefix = "server.error.whitelabel",
+    name = {"enabled"},
+    matchIfMissing = true
+)
+@Conditional({ErrorMvcAutoConfiguration.ErrorTemplateMissingCondition.class})
+protected static class WhitelabelErrorViewConfiguration {
+    private final ErrorMvcAutoConfiguration.StaticView defaultErrorView = new ErrorMvcAutoConfiguration.StaticView();
+
+    protected WhitelabelErrorViewConfiguration() {
+    }
+
+    @Bean(
+        name = {"error"}
+    )
+    @ConditionalOnMissingBean(
+        name = {"error"}
+    )
+    public View defaultErrorView() {
+        return this.defaultErrorView;
+    }
+
+    @Bean
+    @ConditionalOnMissingBean
+    public BeanNameViewResolver beanNameViewResolver() {
+        BeanNameViewResolver resolver = new BeanNameViewResolver();
+        resolver.setOrder(2147483637);
+        return resolver;
+    }
+}
+```
