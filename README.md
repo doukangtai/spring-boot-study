@@ -1949,3 +1949,53 @@ public class Dog {
     private String naMe;
 }
 ```
+
+# 五、 spring-boot-05-jpa
+
+```java
+import javax.persistence.*;
+
+@Entity
+@Table(name = "user")
+public class User {
+
+    @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY) // 主键自增
+    private Integer id;
+    @Column(name = "first_name")
+    private String firstName;
+    @Column // 不指定默认属性名与列名相同
+    private String email;
+```
+
+JpaRepository<实体类, 主键类型>
+
+```java
+@Repository
+public interface UserDao extends JpaRepository<User, Integer> {
+}
+```
+
+JpaRepository接口有一些默认的方法可以直接使用
+
+```java
+@RestController
+public class UserController {
+
+    @Autowired
+    UserDao userDao;
+
+    @GetMapping(path = "/user/{id}")
+    public Optional<User> findById(@PathVariable(value = "id") Integer id) {
+        Optional<User> user = userDao.findById(id);
+        return user;
+    }
+
+    @GetMapping(path = "/user")
+    public User insert(User user) {
+        User user1 = userDao.save(user);
+        return user1;
+    }
+
+}
+```
